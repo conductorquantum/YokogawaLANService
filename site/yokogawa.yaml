@@ -1,0 +1,72 @@
+visa_backend: "@ivi"
+min_current_a: -0.025
+max_current_a: 0.025
+default_step_a: 0.00001
+default_delay_s: 0.01
+audit_log_dir: "../logs/yokogawa-service"
+allow_degraded_startup: true
+
+instruments:
+  - name: yoko0
+    serial: 91T624610
+  - name: yoko1
+    serial: 91T624631
+  - name: yoko2
+    serial: 91T624618
+  - name: yoko3
+    serial: 91T624620
+  - name: yoko4
+    serial: 91T624636
+  - name: yoko5
+    serial: 91T624622
+  - name: yoko6
+    serial: 91T624601
+  - name: yoko7
+    serial: 91T608956
+  - name: yoko8
+    serial: 91T526160
+  - name: yoko9
+    serial: 91T526164
+  - name: yoko10
+    serial: 91T624616
+  - name: yoko11
+    serial: 91T624617
+  - name: yoko12
+    serial: 91T624604
+  - name: yoko13
+    serial: 91T624603
+  - name: yoko14
+    serial: 91T624599
+  - name: yoko15
+    serial: 91T526157
+  - name: yoko16
+    serial: 91T624623
+  - name: yoko17
+    serial: 91T624611
+  - name: yoko18
+    serial: 91T608953
+  - name: yoko19
+    serial: 91T608949
+
+qubit_mapping:
+  Q1: yoko0
+  Q2: yoko1
+  Q3: yoko2
+  Q4: yoko3
+  Q5: yoko4
+  Q6: yoko5
+  Q7: yoko6
+  Q8: yoko7
+  Q9: yoko13
+  Q10: yoko9
+  Q11: yoko10
+  Q12: yoko11
+  Q13: yoko12
+  Q14: yoko8
+  Q15: yoko14
+  Q16: yoko15
+  Q17: yoko16
+  Q18: yoko17
+  Q19: yoko18
+  Q20: yoko19
+

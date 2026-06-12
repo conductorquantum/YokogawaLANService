@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "yokogawa-lan-service"
+version = "1.0.0"
+description = "Safe HTTP service for Yokogawa GS200/GS211 USB current sources."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+    { name = "Conductor Quantum", email = "joel@conductorquantum.com" },
+]
+dependencies = [
+    "fastapi>=0.115",
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "qcodes>=0.58.0",
+    "requests>=2.32.0",
+    "uvicorn[standard]>=0.30",
+]
+
+[project.scripts]
+yoko-lan = "yokogawa_lan_service.cli:main"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.27",
+    "pytest>=8.0.0",
+    "ruff>=0.8.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/yokogawa_lan_service"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --strict-config"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF", "C4", "PTH", "PIE"]
+ignore = ["E501"]
