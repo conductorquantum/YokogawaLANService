@@ -4,15 +4,41 @@ The SDK is the `YokogawaClient` class — a small, dependency-light HTTP client 
 
 ## Install
 
-Into a uv project:
+### From PyPI (pip)
+
+Once the package is published to PyPI:
 
 ```bash
-uv add /path/to/yokogawa-lan-service
-# or, once the repo is pushed to a remote:
-uv add git+https://<repo-url>
+pip install yokogawa-lan-service
 ```
 
-Into a plain virtualenv:
+Until then, install straight from GitHub:
+
+```bash
+pip install git+https://github.com/conductorquantum/YokogawaLANService
+```
+
+### Into a uv project
+
+```bash
+uv add yokogawa-lan-service
+# or from GitHub:
+uv add git+https://github.com/conductorquantum/YokogawaLANService
+```
+
+### With conda
+
+The package is not on conda-forge, so use conda for the environment and pip for the package:
+
+```bash
+conda create -n yoko python=3.12
+conda activate yoko
+pip install yokogawa-lan-service
+# or from GitHub:
+pip install git+https://github.com/conductorquantum/YokogawaLANService
+```
+
+### From a local clone
 
 ```bash
 pip install /path/to/yokogawa-lan-service
