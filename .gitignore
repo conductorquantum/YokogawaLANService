@@ -16,3 +16,5 @@ logs/
 .DS_Store
 .idea/
 .vscode/
+
+.license-scan/
