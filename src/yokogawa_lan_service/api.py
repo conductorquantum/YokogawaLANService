@@ -16,6 +16,7 @@ from yokogawa_lan_service.manager import (
     CurrentLimitError,
     InstrumentBusyError,
     InstrumentUnavailableError,
+    MeasurementUnsupportedError,
     UnknownQubitError,
     YokogawaManager,
 )
@@ -73,6 +74,15 @@ def create_app(
         except Exception as exc:
             raise _http_error(exc, context=f"GET /qubits/{qubit}") from exc
 
+    @app.get("/qubits/{qubit}/voltage")
+    def qubit_voltage(qubit: str):
+        try:
+            return manager.qubit_voltage(qubit)
+        except Exception as exc:
+            raise _http_error(
+                exc, context=f"GET /qubits/{qubit}/voltage"
+            ) from exc
+
     @app.post("/qubits/{qubit}/current")
     def program_current(qubit: str, request: CurrentRequest):
         logger.info(
@@ -128,9 +138,8 @@ def _http_error(exc: Exception, *, context: str = "") -> HTTPException:
     if isinstance(exc, InstrumentBusyError):
         logger.warning("Instrument busy%s: %s", where, exc)
         return HTTPException(status_code=409, detail=str(exc))
-    if isinstance(exc, CurrentLimitError | ValueError):
+    if isinstance(exc, CurrentLimitError | MeasurementUnsupportedError | ValueError):
         logger.warning("Rejected request%s: %s", where, exc)
         return HTTPException(status_code=400, detail=str(exc))
     logger.exception("Unhandled error%s", where)
     return HTTPException(status_code=500, detail=str(exc))
-

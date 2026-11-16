@@ -61,7 +61,12 @@ max_current_a: 0.025
 curl http://localhost:8020/health
 curl http://localhost:8020/yokos
 curl http://localhost:8020/qubits/Q20
+curl http://localhost:8020/qubits/Q20/voltage
 ```
+
+Voltage readings are read-only, require CURR mode, output on, and the /MON option; the
+service enables the monitor for one reading and restores its prior state; `/yokos` and
+`/qubits/{q}` report `monitor_present` without measuring.
 
 Program current while leaving the output in its current state:
 
@@ -99,6 +104,7 @@ from yokogawa_lan_service import YokogawaClient
 yoko = YokogawaClient("http://lab-pc:8020")
 print(yoko.health())
 print(yoko.qubit("Q20"))
+print(yoko.voltage("Q20"))
 
 # Output remains off unless explicitly enabled.
 yoko.set_current("Q20", 1e-3)

@@ -32,6 +32,9 @@ class YokogawaClient:
     def qubit(self, qubit: str) -> dict[str, Any]:
         return self._request("GET", f"/qubits/{qubit}")
 
+    def voltage(self, qubit: str) -> dict[str, Any]:
+        return self._request("GET", f"/qubits/{qubit}/voltage")
+
     def set_current(
         self,
         qubit: str,
@@ -76,4 +79,3 @@ class YokogawaClient:
                 detail = response.text
             raise YokogawaClientError(response.status_code, str(detail))
         return response.json()
-

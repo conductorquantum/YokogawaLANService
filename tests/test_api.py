@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from fastapi.testclient import TestClient
 
@@ -32,17 +34,20 @@ def _config(tmp_path: Path) -> ServiceConfig:
 def _factory(
     *,
     missing: set[str] | None = None,
+    options: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[
     Callable[[InstrumentConfig], InstrumentBackend],
     dict[str, FakeYokogawaBackend],
 ]:
     missing = missing or set()
+    options = options or {}
     instances: dict[str, FakeYokogawaBackend] = {}
 
     def build(config: InstrumentConfig) -> InstrumentBackend:
         backend = FakeYokogawaBackend(
             config,
             fail_connect=config.name in missing,
+            **options.get(config.name, {}),
         )
         instances[config.name] = backend
         return backend
@@ -51,7 +56,7 @@ def _factory(
 
 
 def test_health_and_listing_report_connected_instruments(tmp_path: Path) -> None:
-    build, _instances = _factory()
+    build, instances = _factory()
     app = create_app(_config(tmp_path), backend_factory=build)
 
     with TestClient(app) as client:
@@ -62,6 +67,108 @@ def test_health_and_listing_report_connected_instruments(tmp_path: Path) -> None
         yokos = client.get("/yokos").json()["items"]
         assert [item["name"] for item in yokos] == ["yoko0", "yoko19"]
         assert yokos[1]["qubit"] == "Q20"
+        assert yokos[1]["monitor_present"] is True
+
+        qubit = client.get("/qubits/Q20").json()
+        assert qubit["monitor_present"] is True
+        assert instances["yoko19"].measure_count == 0
+
+
+def test_qubit_voltage_reads_once_and_preserves_output_and_current(
+    tmp_path: Path,
+) -> None:
+    build, instances = _factory(options={"yoko19": {"voltage_v": 0.123}})
+    app = create_app(_config(tmp_path), backend_factory=build)
+
+    with TestClient(app) as client:
+        backend = instances["yoko19"]
+        backend.current_a = 0.012
+        backend.output = "on"
+
+        response = client.get("/qubits/Q20/voltage")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["qubit"] == "Q20"
+        assert payload["instrument"] == "yoko19"
+        assert payload["voltage_v"] == 0.123
+        assert payload["current_a"] == 0.012
+        assert payload["output"] == "on"
+        measured_at = datetime.fromisoformat(payload["measured_at"])
+        assert measured_at.utcoffset() == timedelta(0)
+        assert backend.output == "on"
+        assert backend.current_a == 0.012
+        assert backend.sense_enabled is False
+        assert backend.measure_count == 1
+
+    assert not (tmp_path / "audit").exists()
+
+
+def test_qubit_voltage_returns_busy_when_instrument_lock_is_held(
+    tmp_path: Path,
+) -> None:
+    build, _instances = _factory()
+    app = create_app(_config(tmp_path), backend_factory=build)
+
+    with TestClient(app) as client:
+        lock = app.state.manager._locks["yoko19"]
+        assert lock.acquire(blocking=False)
+        try:
+            response = client.get("/qubits/Q20/voltage")
+        finally:
+            lock.release()
+
+    assert response.status_code == 409
+
+
+def test_qubit_voltage_returns_unavailable_for_disconnected_instrument(
+    tmp_path: Path,
+) -> None:
+    build, _instances = _factory(missing={"yoko19"})
+    app = create_app(_config(tmp_path), backend_factory=build)
+
+    with TestClient(app) as client:
+        response = client.get("/qubits/Q20/voltage")
+
+    assert response.status_code == 503
+
+
+def test_qubit_voltage_rejects_instrument_without_monitor(tmp_path: Path) -> None:
+    build, instances = _factory(options={"yoko19": {"monitor_present": False}})
+    app = create_app(_config(tmp_path), backend_factory=build)
+
+    with TestClient(app) as client:
+        response = client.get("/qubits/Q20/voltage")
+
+    assert response.status_code == 400
+    assert "/MON" in response.json()["detail"]
+    assert instances["yoko19"].measure_count == 0
+
+
+def test_qubit_voltage_rejects_voltage_source_mode(tmp_path: Path) -> None:
+    build, instances = _factory(
+        options={"yoko19": {"initial_source_mode": "VOLT"}}
+    )
+    app = create_app(_config(tmp_path), backend_factory=build)
+
+    with TestClient(app) as client:
+        response = client.get("/qubits/Q20/voltage")
+
+    assert response.status_code == 400
+    assert "CURR" in response.json()["detail"]
+    assert instances["yoko19"].measure_count == 0
+
+
+def test_qubit_voltage_rejects_output_off(tmp_path: Path) -> None:
+    build, instances = _factory()
+    app = create_app(_config(tmp_path), backend_factory=build)
+
+    with TestClient(app) as client:
+        response = client.get("/qubits/Q20/voltage")
+
+    assert response.status_code == 400
+    assert "output" in response.json()["detail"]
+    assert instances["yoko19"].measure_count == 0
 
 
 def test_program_current_keeps_output_off_and_writes_audit_log(tmp_path: Path) -> None:
@@ -138,4 +245,3 @@ def test_output_requires_explicit_call_and_all_off(tmp_path: Path) -> None:
         assert all_off.status_code == 200
         assert instances["yoko19"].output == "off"
         assert instances["yoko0"].output == "off"
-
