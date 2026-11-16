@@ -38,6 +38,22 @@ def test_client_set_current_posts_expected_payload(monkeypatch: pytest.MonkeyPat
     ]
 
 
+def test_client_voltage_gets_qubit_voltage(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+
+    def request(method, url, *, json=None, timeout=None):
+        calls.append((method, url, json, timeout))
+        return _Response(200, {"voltage_v": 0.123})
+
+    monkeypatch.setattr("requests.request", request)
+
+    client = YokogawaClient("http://lab-pc:8020", timeout_s=3)
+    assert client.voltage("Q20")["voltage_v"] == 0.123
+    assert calls == [
+        ("GET", "http://lab-pc:8020/qubits/Q20/voltage", None, 3)
+    ]
+
+
 def test_client_raises_service_error(monkeypatch: pytest.MonkeyPatch) -> None:
     def request(method, url, *, json=None, timeout=None):
         return _Response(400, {"detail": "bad current"})
@@ -49,4 +65,3 @@ def test_client_raises_service_error(monkeypatch: pytest.MonkeyPatch) -> None:
         client.set_output("Q1", "invalid")
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "bad current"
-

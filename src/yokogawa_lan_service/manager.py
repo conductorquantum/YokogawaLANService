@@ -37,6 +37,10 @@ class InstrumentUnavailableError(YokogawaServiceError):
     """Raised when a mapped Yokogawa is not connected."""
 
 
+class MeasurementUnsupportedError(YokogawaServiceError):
+    """Raised when an instrument cannot take the requested measurement."""
+
+
 class InstrumentBusyError(YokogawaServiceError):
     """Raised when another request owns the same instrument lock."""
 
@@ -132,6 +136,41 @@ class YokogawaManager:
         normalized = normalize_qubit(qubit)
         backend = self._backend_for_qubit(normalized)
         return self._status_payload(backend.snapshot(), qubit=normalized)
+
+    def qubit_voltage(self, qubit: str) -> dict[str, Any]:
+        normalized = normalize_qubit(qubit)
+        backend = self._backend_for_qubit(normalized)
+        with self._instrument_lock(backend.config.name):
+            snapshot = backend.snapshot()
+            if not snapshot.connected:
+                raise InstrumentUnavailableError(
+                    f"{backend.config.name} is unavailable: "
+                    f"{snapshot.error or 'not connected'}"
+                )
+            if not snapshot.monitor_present:
+                raise MeasurementUnsupportedError(
+                    f"{backend.config.name} has no /MON monitor option"
+                )
+            if snapshot.source_mode != "CURR":
+                raise MeasurementUnsupportedError(
+                    f"{backend.config.name} is in {snapshot.source_mode} mode; "
+                    "voltage measurement requires CURR"
+                )
+            if snapshot.output != "on":
+                raise MeasurementUnsupportedError(
+                    f"{backend.config.name} output is off; "
+                    "voltage measurement requires output on"
+                )
+
+            voltage_v = backend.measure_voltage()
+            return {
+                "qubit": normalized,
+                "instrument": backend.config.name,
+                "voltage_v": voltage_v,
+                "current_a": snapshot.current_a,
+                "output": snapshot.output,
+                "measured_at": datetime.now(UTC).isoformat(),
+            }
 
     def refresh(self) -> dict[str, Any]:
         for backend in self._backends.values():
@@ -297,6 +336,7 @@ class YokogawaManager:
             "source_mode": snapshot.source_mode,
             "current_a": snapshot.current_a,
             "current_range_a": snapshot.current_range_a,
+            "monitor_present": snapshot.monitor_present,
             "error": snapshot.error,
         }
 

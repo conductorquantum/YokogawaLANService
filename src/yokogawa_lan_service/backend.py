@@ -24,6 +24,7 @@ class InstrumentSnapshot:
     source_mode: str | None = None
     current_a: float | None = None
     current_range_a: float | None = None
+    monitor_present: bool | None = None
     error: str | None = None
 
 
@@ -37,6 +38,10 @@ class InstrumentBackend(Protocol):
     def close(self) -> None: ...
 
     def snapshot(self) -> InstrumentSnapshot: ...
+
+    def measure_voltage(self) -> float:
+        """Take one voltage reading without changing output, level, range, or mode."""
+        ...
 
     def program_current(self, target_a: float, *, step_a: float, delay_s: float) -> None:
         """Set current without implicitly enabling output."""
@@ -104,6 +109,7 @@ class QcodesYokogawaBackend:
                 source_mode=source_mode,
                 current_a=current_a,
                 current_range_a=current_range_a,
+                monitor_present=bool(instrument.measure.present),
             )
         except Exception as exc:
             self._last_error = f"{type(exc).__name__}: {exc}"
@@ -116,6 +122,27 @@ class QcodesYokogawaBackend:
                 connected=False,
                 error=self._last_error,
             )
+
+    def measure_voltage(self) -> float:
+        instrument = self._require_instrument()
+        monitor = instrument.measure
+        if not monitor.present:
+            raise ValueError(f"{self.config.name} has no /MON monitor option")
+        if instrument.source_mode() != "CURR":
+            raise ValueError("voltage measurement requires CURR source mode")
+        if instrument.output() != "on":
+            raise ValueError("voltage measurement requires output on")
+
+        was_enabled = bool(monitor.state())
+        if not was_enabled:
+            monitor.on()
+        try:
+            # Use :MEAS? directly; the driver getter depends on cached output,
+            # range, and auto-range flags.
+            return float(instrument.ask(":MEAS?"))
+        finally:
+            if not was_enabled:
+                monitor.off()
 
     def program_current(self, target_a: float, *, step_a: float, delay_s: float) -> None:
         instrument = self._require_instrument()
@@ -192,6 +219,8 @@ class FakeYokogawaBackend:
         *,
         fail_connect: bool = False,
         initial_source_mode: str = "CURR",
+        monitor_present: bool = True,
+        voltage_v: float = 0.0,
     ) -> None:
         self.config = config
         self.fail_connect = fail_connect
@@ -201,6 +230,10 @@ class FakeYokogawaBackend:
         self.source_mode = initial_source_mode
         self.current_a = 0.0
         self.current_range_a = 100e-3
+        self.monitor_present = monitor_present
+        self.voltage_v = voltage_v
+        self.sense_enabled = False
+        self.measure_count = 0
         self.last_error: str | None = None
 
     def connect(self) -> None:
@@ -233,7 +266,19 @@ class FakeYokogawaBackend:
             source_mode=self.source_mode,
             current_a=self.current_a if self.source_mode == "CURR" else None,
             current_range_a=self.current_range_a if self.source_mode == "CURR" else None,
+            monitor_present=self.monitor_present,
         )
+
+    def measure_voltage(self) -> float:
+        self._require_connected()
+        if not self.monitor_present:
+            raise ValueError(f"{self.config.name} has no /MON monitor option")
+        if self.source_mode != "CURR":
+            raise ValueError("voltage measurement requires CURR source mode")
+        if self.output != "on":
+            raise ValueError("voltage measurement requires output on")
+        self.measure_count += 1
+        return self.voltage_v
 
     def program_current(self, target_a: float, *, step_a: float, delay_s: float) -> None:
         self._require_connected()
